@@ -1,0 +1,15 @@
+{
+  "name": "Local Private AI",
+  "short_name": "LocalAI",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#1a1a1a",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/527/527489.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
