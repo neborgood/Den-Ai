@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local WebLLM Chat</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1a1a1a">
+    <style>
+        :root {
+            --bg-color: #121212;
+            --chat-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --accent-color: #007acc;
+            --user-msg: #2b2b2b;
+            --ai-msg: #1e1e1e;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        header {
+            background-color: var(--chat-bg);
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+            border-bottom: 1px solid #333;
+        }
+
+        #status-container {
+            margin-top: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #status {
+            font-size: 0.8rem;
+            color: #aaa;
+            text-align: center;
+            max-width: 90%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Progress Bar Styling */
+        #progress-bar-container {
+            width: 80%;
+            height: 6px;
+            background-color: #333;
+            border-radius: 3px;
+            overflow: hidden;
+            display: block;
+        }
+
+        #progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: var(--accent-color);
+            transition: width 0.3s ease;
+        }
+
+        #chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .user {
+            background-color: var(--user-msg);
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .ai {
+            background-color: var(--ai-msg);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+            border: 1px solid #333;
+        }
+
+        #input-container {
+            display: flex;
+            padding: 15px;
+            background-color: var(--chat-bg);
+            border-top: 1px solid #333;
+            gap: 10px;
+        }
+
+        textarea {
+            flex: 1;
+            background-color: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 20px;
+            color: #fff;
+            padding: 10px 15px;
+            resize: none;
+            height: 24px;
+            font-family: inherit;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+
+        button {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        button:disabled {
+            background-color: #444;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        Local Private AI
+        <div id="status-container">
+            <div id="status">Checking WebGPU support...</div>
+            <div id="progress-bar-container">
+                <div id="progress-bar"></div>
+            </div>
+        </div>
+    </header>
+
+    <div id="chat-container">
+        <div class="message ai">Hi! I am your completely private, on-device AI. Once my model finishes loading, we can chat without any internet connection.</div>
+    </div>
+
+    <div id="input-container">
+        <textarea id="user-input" placeholder="Type a message..." disabled></textarea>
+        <button id="send-btn" disabled>➔</button>
+    </div>
+
+    <script type="module">
+        import { CreateMLCEngine } from "https://esm.run/@mlc-ai/web-llm";
+
+        const statusDiv = document.getElementById("status");
+        const progressBar = document.getElementById("progress-bar");
+        const progressBarContainer = document.getElementById("progress-bar-container");
+        const chatContainer = document.getElementById("chat-container");
+        const userInput = document.getElementById("user-input");
+        const sendBtn = document.getElementById("send-btn");
+
+        // Super tiny model for fast mobile caching
+        const selectedModel = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
+        let engine;
+
+        async function initEngine() {
+            try {
+                statusDiv.innerText = "Initializing engine...";
+                
+                // Track loader progress accurately
+                const initProgressCallback = (report) => {
+                    statusDiv.innerText = report.text;
+                    const percent = Math.round(report.progress * 100);
+                    progressBar.style.width = `${percent}%`;
+                };
+
+                // Initialize the engine and download the model files
+                engine = await CreateMLCEngine(selectedModel, { initProgressCallback });
+
+                // Success states
+                statusDiv.innerText = "Model loaded & Ready! (Offline)";
+                progressBarContainer.style.display = "none"; // Hide progress bar once loaded
+                userInput.disabled = false;
+                sendBtn.disabled = false;
+            } catch (err) {
+                statusDiv.innerText = "Error loading WebGPU. Check browser compatability.";
+                progressBar.style.backgroundColor = "#ff3333";
+                console.error(err);
+            }
+        }
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            // Append user message
+            appendMessage(text, "user");
+            userInput.value = "";
+            userInput.disabled = true;
+            sendBtn.disabled = true;
+
+            // Setup AI placeholder
+            const aiMessageElement = appendMessage("Thinking...", "ai");
+
+            try {
+                const messages = [{ role: "user", content: text }];
+                const reply = await engine.chat.completions.create({
+                    messages,
+                    stream: true
+                });
+
+                let responseText = "";
+                for await (const chunk of reply) {
+                    const delta = chunk.choices[0]?.delta?.content || "";
+                    responseText += delta;
+                    aiMessageElement.innerText = responseText;
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+            } catch (error) {
+                aiMessageElement.innerText = "Error generating response.";
+                console.error(error);
+            } finally {
+                userInput.disabled = false;
+                sendBtn.disabled = false;
+                userInput.focus();
+            }
+        }
+
+        function appendMessage(text, sender) {
+            const msg = document.createElement("div");
+            msg.classList.add("message", sender);
+            msg.innerText = text;
+            chatContainer.appendChild(msg);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            return msg;
+        }
+
+        sendBtn.addEventListener("click", sendMessage);
+        userInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Register Service Worker for PWA
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.register("sw.js")
+                .then(() => console.log("Service Worker Registered"))
+                .catch(err => console.error("SW Registration Failed", err));
+        }
+
+        initEngine();
+    </script>
+</body>
+</html>
